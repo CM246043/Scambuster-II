@@ -1,0 +1,64 @@
+/*
+  SCAMBUSTER AI: INTEGRATION BUNDLE
+  ---------------------------------
+  This file contains the core logic and components for the ScamBuster AI.
+  To integrate:
+  1. Add 'geminiService.ts' to your services folder.
+  2. Update your 'App.tsx' with the provided component.
+  3. Ensure 'index.css' includes the theme variables.
+*/
+
+// --- SERVICE: src/services/geminiService.ts ---
+import { GoogleGenAI, Type } from "@google/genai";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export interface ScamAnalysis {
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  score: number;
+  scamType: string;
+  verdict: string;
+  indicators: string[];
+  explanation: string;
+  recommendations: string[];
+  supervisorThought: string;
+}
+
+export async function analyzeScam(content: string): Promise<ScamAnalysis> {
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `Analyze the following message for potential scam indicators. Provide a detailed report.
+    In your report, include a 'supervisorThought' field which should be a meta-analysis of your reasoning process.
+    Message: ${content}`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          riskLevel: { type: Type.STRING, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] },
+          score: { type: Type.NUMBER },
+          scamType: { type: Type.STRING },
+          verdict: { type: Type.STRING },
+          indicators: { type: Type.ARRAY, items: { type: Type.STRING } },
+          explanation: { type: Type.STRING },
+          recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+          supervisorThought: { type: Type.STRING }
+        },
+        required: ["riskLevel", "score", "scamType", "verdict", "indicators", "explanation", "recommendations", "supervisorThought"]
+      }
+    }
+  });
+  return JSON.parse(response.text || "{}") as ScamAnalysis;
+}
+
+// --- STYLES: src/index.css (Theme Variables) ---
+/*
+@theme {
+  --color-bg: #0a0a0c;
+  --color-surface: #16161e;
+  --color-border: #2d2d3d;
+  --color-accent: #10b981;
+  --color-text: #e2e8f0;
+  --color-text-dim: #94a3b8;
+}
+*/

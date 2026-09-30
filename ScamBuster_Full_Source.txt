@@ -1,0 +1,64 @@
+// =================================================================
+// SCAMBUSTER AI: HARDENED ARCHITECTURE (DESKTOP & WEB)
+// =================================================================
+// Bundle Date: 2026-05-07
+// Security: Client-Side SDK with Platform Proxy
+// Engine: Gemini 3 Flash Preview (Optimized for Reputation Checks)
+// Distribution: Web (Live), PWA (Installable), Desktop (.EXE/.MSI)
+// Quota Management: 50 Scan Limit (Local Persistence)
+// =================================================================
+
+// --- DESKTOP DISTRIBUTION GUIDE ---
+/*
+  To generate your 'One-Click Installer' (.exe / .msi):
+  
+  1. EXPORT: Go to Settings -> "Export to ZIP" in this AI Studio environment.
+  2. EXTRACT: Unzip the files on your local Windows PC.
+  3. PREREQUISITES:
+     - Install Node.js on your computer (from nodejs.org).
+  4. BUILD:
+     - Open a terminal (PowerShell or CMD) in the extracted folder.
+     - Run: npm install
+     - Run: npm run electron:dist
+  5. RESULT: Check the 'release' folder. You will find your .exe and .msi installers there!
+*/
+
+// --- PROJECT ARCHITECTURE OVERVIEW ---
+
+// 1. FILE: src/services/geminiService.ts (Defensive Core)
+/*
+  The analysis logic uses Gemini 3 Flash with Google Search grounding.
+  It includes:
+  - Multi-attempt retry logic for transient RPC failures (Code 500/XHR errors).
+  - Reputation check protocol for business and personal names.
+  - Strict JSON schema enforcement for UI consistency.
+*/
+
+// 2. FILE: src/App.tsx (UX & Support Protocols)
+/*
+  Key Features:
+  - Safety & Ethics Protocol: Integrated disclaimers and official reporting links (FTC, IC3).
+  - Input Presets: Quick-start buttons for checking names, businesses, and links.
+  - Intel Support Protocol: PayPal Hosted Button with a 'Manual Protocol Bypass' fallback link.
+  - Reactive Terminal UI: Real-time scan lines and status fail/pass indicators.
+  - Quota Management: Limits users to 50 local scans to prevent API exhaustion.
+*/
+
+// 3. FILE: electron-main.cjs (Desktop Window Logic)
+/*
+  This script manages the native OS window. It is configured to:
+  - Block unauthorized navigation.
+  - Open external links (like PayPal/Reporting sites) in the user's default browser.
+  - Hide the menu bar for a streamlined "app-like" feel.
+*/
+
+// 4. FILE: package.json (Build Pipeline)
+/*
+  Contains the 'electron-builder' configuration for generating Windows installers.
+  Targets: 'nsis' (Standard EXE) and 'msi' (Professional Enterprise Installer).
+*/
+
+// =================================================================
+// "Making it harder for scammers to profit is the first step 
+// toward a more honest society."
+// =================================================================
