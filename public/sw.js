@@ -1,7 +1,19 @@
-const CACHE = 'scambuster-v1';
+const CACHE = 'scambuster-v2';
 
+// Precache the app shell plus every same-origin asset referenced by the built index.html,
+// so the installed app opens offline even on the very first offline launch.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['./', './index.html'])));
+  event.waitUntil(
+    caches.open(CACHE).then(async (cache) => {
+      const response = await fetch('./index.html', { cache: 'no-cache' });
+      const html = await response.clone().text();
+      const assets = [...html.matchAll(/(?:src|href)="([^"]+)"/g)]
+        .map((m) => m[1])
+        .filter((url) => !/^([a-z]+:)?\/\//i.test(url));
+      await cache.put('./index.html', response);
+      await cache.addAll(['./', ...new Set(assets)]);
+    }),
+  );
   self.skipWaiting();
 });
 

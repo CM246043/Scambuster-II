@@ -21,73 +21,17 @@ import {
 } from 'lucide-react';
 import { analyzeScam, ScamAnalysis } from './services/scamEngine';
 
-const PayPalDonate = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  React.useEffect(() => {
-    const containerId = "paypal-container-UQCHYWTCTD6AN";
-    const container = document.getElementById(containerId);
-    
-    let retryCount = 0;
-    const maxRetries = 5;
-
-    const initPaypal = () => {
-      const paypal = (window as any).paypal;
-      if (paypal && container) {
-        if (!container.hasChildNodes()) {
-          try {
-            paypal.HostedButtons({
-              hostedButtonId: "UQCHYWTCTD6AN",
-            }).render(`#${containerId}`);
-            setIsLoaded(true);
-          } catch (e) {
-            console.error("PayPal Render Error:", e);
-          }
-        } else {
-          setIsLoaded(true);
-        }
-      } else if (retryCount < maxRetries) {
-        retryCount++;
-        setTimeout(initPaypal, 1000);
-      }
-    };
-
-    const timer = setTimeout(initPaypal, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div className="w-full space-y-2">
-      <div 
-        id="paypal-container-UQCHYWTCTD6AN" 
-        className="w-full flex flex-col items-center justify-center min-h-[50px] overflow-hidden rounded-sm bg-black/20 py-2 px-1 border border-white/5"
-      >
-        {!isLoaded && (
-          <div className="text-[9px] text-text-dim uppercase tracking-tighter opacity-50 animate-pulse flex items-center gap-2">
-            <RefreshCw className="w-2 h-2 animate-spin" />
-            Establishing Secure Link...
-          </div>
-        )}
-      </div>
-      
-      {/* Protocol Bypass Link */}
-      <div className="text-center">
-        <a 
-          href="https://www.paypal.com/ncp/payment/UQCHYWTCTD6AN" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-[8px] font-mono text-accent/60 hover:text-accent uppercase tracking-widest transition-colors flex items-center justify-center gap-1"
-        >
-          <span>Manual Support Protocol</span>
-          <ExternalLink className="w-2 h-2" />
-        </a>
-        <p className="text-[7px] text-text-dim/40 mt-1 italic">
-          (Use if button is blocked by firewall)
-        </p>
-      </div>
-    </div>
-  );
-};
+const PayPalDonate = () => (
+  <a
+    href="https://www.paypal.com/ncp/payment/UQCHYWTCTD6AN"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full flex items-center justify-center gap-2 rounded-sm bg-accent/10 border border-accent/30 py-3 text-accent text-xs font-bold uppercase tracking-widest hover:bg-accent/20 transition-colors"
+  >
+    Donate with PayPal
+    <ExternalLink className="w-3 h-3" />
+  </a>
+);
 
 const SAMPLE_SCAMS = [
   "URGENT: Your bank account has been compromised. Click here to verify your identity: http://bank-secure-verify.net/login",
