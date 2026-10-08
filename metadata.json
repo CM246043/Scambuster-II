@@ -1,8 +1,6 @@
 {
-  "name": "ScamBuster AI",
-  "description": "An AI-powered tool to identify and analyze potential scams in messages, emails, and suspect communications.",
+  "name": "ScamBuster",
+  "description": "A free scam checker that analyzes messages, emails, links, names, and businesses for scam warning signs, entirely in your browser with no API keys.",
   "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "majorCapabilities": []
 }
