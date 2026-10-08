@@ -34,6 +34,11 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((cache) => cache.put(request, copy));
         return response;
       })
-      .catch(() => caches.match(request).then((cached) => cached || caches.match('./index.html'))),
+      .catch(async () => {
+        const cached = await caches.match(request, { ignoreVary: true, ignoreSearch: true });
+        if (cached) return cached;
+        if (request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      }),
   );
 });
