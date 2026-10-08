@@ -15,7 +15,7 @@ export interface ReputationTarget {
 }
 
 export interface ScamAnalysis {
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'UNVERIFIED';
   score: number;
   scamType: string;
   verdict: string;
@@ -300,7 +300,7 @@ const URL_RE = new RegExp(
 const EMAIL_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
 const PHONE_RE = /(?:\+?1[\s.-]?)?\(?\b\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g;
 const QUOTED_RE = /(?:^|[\s(:])["“'‘]([^"“”'‘’\n]{2,60}?)["”'’](?=[\s.,;:!?)]|$)/g;
-const BUSINESS_RE = /\b([A-Z][\w&'.-]*(?:\s+[A-Z&][\w&'.-]*){0,4}\s+(?:LLC|L\.L\.C\.|Inc\.?|Corp\.?|Corporation|Co\.|Company|Ltd\.?|Services|Solutions|Group|Motors|Automotive|Auto Repair|Auto|Mobile Mechanics?|Mechanics?|Towing|Recovery|Construction|Roofing|Plumbing))(?![\w])/g;
+const BUSINESS_RE = /\b([A-Z][\w&'.-]*(?:\s+[A-Z&][\w&'.-]*){0,4}\s+(?:LLC|L\.L\.C\.|Inc\.?|Corp\.?|Corporation|Co\.|Company|Ltd\.?|Services|Solutions|Group|Motors|Automotive|Auto Repair|Auto Care|Auto Body|Auto Service|Body Shop|Garage|Repair|Transmissions?|Tires?|Auto|Mobile Mechanics?|Mechanics?|Towing|Recovery|Construction|Roofing|Plumbing))(?![\w])/g;
 
 interface LinkFinding {
   url: string;
@@ -419,12 +419,15 @@ function extractTargets(text: string, links: LinkFinding[]): ReputationTarget[] 
     URL_RE.lastIndex = 0;
     add('NAME', v);
   }
-  for (const m of text.matchAll(BUSINESS_RE)) add('NAME', m[1]);
+  for (const m of text.matchAll(BUSINESS_RE)) add('NAME', m[1].replace(/^(?:(?:is|was|has|does|did|check|verify|about|hired|called|from|with|and|the)\s+)+/i, ''));
 
   const trimmed = text.trim();
-  if (!targets.length && trimmed.length <= 80 && !/[.!?].+[.!?]/.test(trimmed)) {
-    add('NAME', trimmed.replace(/^(is|check|verify|who is|what is)\s+/i, '').replace(/\?$/, ''));
-  }
+  const candidate = trimmed.replace(/^(is|check|verify|who is|what is)\s+/i, '').replace(/[?.]$/, '');
+  const looksLikeName =
+    candidate.split(/\s+/).length <= 8 &&
+    !/[.!?].+[.!?]/.test(trimmed) &&
+    !/\b(i|i'?m|me|my|we|our|you|your|he|she|they|was|were|wore|went|did|today|yesterday|tomorrow)\b/i.test(candidate);
+  if (!targets.length && looksLikeName) add('NAME', candidate);
   return targets;
 }
 
@@ -469,35 +472,43 @@ export function analyzeScamSync(content: string): ScamAnalysis {
   if (has('sensitive_info') && badLinks.length) score += 10;
   if (has('impersonation') && has('remote_access')) score += 10;
 
+  const targets = extractTargets(text, links);
   const signalCount = failed.length + (badLinks.length ? 1 : 0);
-  score = signalCount === 0 ? 2 : Math.min(99, Math.max(score, 8));
+  // A bare name/number/site has no wording to judge, so don't show a reassuring low score.
+  const unverified = signalCount === 0 && targets.length > 0;
+  score = unverified ? 0 : signalCount === 0 ? 2 : Math.min(99, Math.max(score, 8));
 
-  const riskLevel: ScamAnalysis['riskLevel'] = score >= 70 ? 'CRITICAL' : score >= 45 ? 'HIGH' : score >= 20 ? 'MEDIUM' : 'LOW';
+  const riskLevel: ScamAnalysis['riskLevel'] = unverified ? 'UNVERIFIED' : score >= 70 ? 'CRITICAL' : score >= 45 ? 'HIGH' : score >= 20 ? 'MEDIUM' : 'LOW';
 
   const topRule = [...failed].sort((a, b) => contribution(b) - contribution(a))[0]?.rule;
   const scamType = topRule
     ? topRule.scamType
     : badLinks.length
       ? 'Phishing Link'
-      : 'No Known Scam Pattern';
+      : unverified
+        ? 'Reputation Check Needed'
+        : 'No Known Scam Pattern';
 
   const verdicts: Record<ScamAnalysis['riskLevel'], string> = {
     CRITICAL: 'Almost certainly a scam. Do not respond or pay.',
     HIGH: 'Strong scam warning signs. Stop and verify.',
     MEDIUM: 'Some red flags. Proceed with caution.',
+    UNVERIFIED: "Can't tell from a name alone. Check their reputation before you hire or pay.",
     LOW: signalCount ? 'Minor concerns. Verify before trusting.' : 'No common scam patterns found.',
   };
 
-  const indicators: ScamIndicator[] = [
+  const indicators: ScamIndicator[] = unverified
+    ? [{ label: 'Not verified: a name, number, or website alone has no wording to analyze. Check reviews, complaints, and licensing with the links above.', status: 'FAIL' }]
+    : [
     ...failed.map(({ rule, hits }) => ({ label: `${rule.failLabel}: "${hits.slice(0, 2).join('", "')}"`, status: 'FAIL' as const })),
     ...badLinks.map((l) => ({ label: `Suspicious link ${l.host}: ${l.issues.join('; ')}`, status: 'FAIL' as const })),
     ...passed.map((rule) => ({ label: rule.passLabel, status: 'PASS' as const })),
   ];
-  if (links.length && !badLinks.length) indicators.push({ label: `Links checked (${links.map((l) => l.host).join(', ')}): no obvious red flags`, status: 'PASS' });
+  if (!unverified && links.length && !badLinks.length) indicators.push({ label: `Links checked (${links.map((l) => l.host).join(', ')}): no obvious red flags`, status: 'PASS' });
 
-  const targets = extractTargets(text, links);
-
-  const explanation = signalCount
+  const explanation = unverified
+    ? "A name, business, phone number, or website on its own has no scam wording to analyze, so ScamBuster can't score it. No warning signs here does NOT mean they're safe: many scam businesses have normal-sounding names. Use the reputation links above to look for complaints, lawsuits, and reviews."
+    : signalCount
     ? `Found ${signalCount} warning sign${signalCount === 1 ? '' : 's'}: ${[
         ...failed.map((f) => f.rule.failLabel.toLowerCase()),
         ...(badLinks.length ? [`${badLinks.length} suspicious link${badLinks.length === 1 ? '' : 's'}`] : []),
@@ -505,6 +516,12 @@ export function analyzeScamSync(content: string): ScamAnalysis {
     : `No common scam phrases or risky links were found. That does not guarantee it is safe: scammers change their wording, and a plain name or business can't be judged from text alone.${targets.length ? ' Use the reputation links above to check reviews and complaints.' : ''}`;
 
   const recommendations = uniq([
+    ...(unverified
+      ? [
+          'Some scam businesses change their name after complaints pile up, so few results online is also a warning sign.',
+          'For a mechanic or contractor, check your state license lookup, get a written estimate, and never pay cash or the full amount up front.',
+        ]
+      : []),
     ...failed.map((f) => f.rule.advice),
     ...(badLinks.length ? ["Don't click the link. Type the company's official web address yourself, or use its official app."] : []),
     ...(targets.length ? ['Look up every name, business, phone number, and website using the reputation links. No online footprint, or a pile of complaints, are both warning signs.'] : []),

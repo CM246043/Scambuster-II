@@ -70,6 +70,22 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ScamAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [blockedLink, setBlockedLink] = useState<string | null>(null);
+
+  React.useEffect(() => setBlockedLink(null), [result]);
+
+  // Some embedded browsers and in-app previews silently block new tabs; show the link instead of doing nothing.
+  const openExternal = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+    e.preventDefault();
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.opener = null;
+      setBlockedLink(null);
+      return;
+    }
+    navigator.clipboard?.writeText(url).catch(() => {});
+    setBlockedLink(url);
+  };
   const INPUT_PRESETS = [
     { label: "A Mechanic's Quote", text: "Mobile mechanic says he needs $1,800 cash up front for parts before he starts. No written estimate, says he's not licensed but has 20 years experience. Pay via Zelle." },
     { label: "A Business Name", text: "Is 'Global Asset Recovery LLC' a reputable business?" },
@@ -97,6 +113,7 @@ export default function App() {
 
   const getRiskColor = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return 'text-amber-400';
       case 'LOW': return 'text-emerald-400';
       case 'MEDIUM': return 'text-amber-400';
       case 'HIGH': return 'text-red-400';
@@ -107,6 +124,7 @@ export default function App() {
 
   const getRiskBg = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return 'bg-amber-500/10 border-amber-500/20';
       case 'LOW': return 'bg-emerald-500/10 border-emerald-500/20';
       case 'MEDIUM': return 'bg-amber-500/10 border-amber-500/20';
       case 'HIGH': return 'bg-red-500/10 border-red-500/20';
@@ -117,6 +135,7 @@ export default function App() {
 
   const getRiskIcon = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return <AlertTriangle className="w-8 h-8 text-amber-400" />;
       case 'LOW': return <ShieldCheck className="w-8 h-8 text-emerald-400" />;
       case 'MEDIUM': return <ShieldAlert className="w-8 h-8 text-amber-400" />;
       case 'HIGH': return <ShieldX className="w-8 h-8 text-red-400" />;
@@ -334,10 +353,10 @@ export default function App() {
                     <span className="section-label">Scam Risk Score</span>
                     <div className="flex items-end justify-between">
                       <div className="text-5xl font-light text-white tracking-tighter">
-                        <AnimatedScore value={result.score} />
+                        {result.riskLevel === 'UNVERIFIED' ? '?' : <AnimatedScore value={result.score} />}
                       </div>
                       <div className={`text-xs font-bold uppercase tracking-widest ${getRiskColor(result.riskLevel)}`}>
-                        {result.riskLevel} Risk Level
+                        {result.riskLevel === 'UNVERIFIED' ? 'Unverified' : `${result.riskLevel} Risk Level`}
                       </div>
                     </div>
                     <div className="mt-6">
@@ -350,7 +369,7 @@ export default function App() {
                         />
                       </div>
                       <div className="mt-2 text-[10px] text-text-dim uppercase tracking-widest">
-                        Warning signs found: {result.signalCount}
+                        {result.riskLevel === 'UNVERIFIED' ? 'Not enough info to score. Check their reputation below.' : `Warning signs found: ${result.signalCount}`}
                       </div>
                     </div>
                   </motion.div>
@@ -407,6 +426,7 @@ export default function App() {
                                     href={link.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    onClick={(e) => openExternal(e, link.url)}
                                     className="text-[10px] px-3 py-1.5 bg-white/5 border border-white/10 rounded-sm hover:border-accent hover:text-accent transition-all uppercase tracking-tighter flex items-center gap-1"
                                   >
                                     {link.label}
@@ -416,6 +436,12 @@ export default function App() {
                               </div>
                             </div>
                           ))}
+                          {blockedLink && (
+                            <div className="text-[12px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3 space-y-1">
+                              <div>Your browser blocked the new tab. The link was copied, so paste it into your browser's address bar:</div>
+                              <div className="font-mono text-[11px] break-all select-all text-white">{blockedLink}</div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
