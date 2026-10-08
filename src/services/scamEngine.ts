@@ -35,6 +35,7 @@ interface Rule {
   passLabel: string;
   weight: number;
   patterns: RegExp[];
+  requires?: RegExp;
   advice: string;
 }
 
@@ -103,6 +104,7 @@ const RULES: Rule[] = [
     failLabel: 'Creates false urgency or pressure to act now',
     passLabel: 'No artificial urgency detected',
     weight: 12,
+    requires: /\b(mechanic|repair|car|truck|vehicle|engine|transmission|shop|garage|tech(nician)?|contractor|handyman|tow(ing)?|install(er)?|plumber|electrician|roofer)s?\b/i,
     patterns: [
       /\b(urgent(ly)?|immediately|right away|right now|act now|asap|as soon as possible|don'?t delay|hurry)\b/i,
       /\b(within (the next )?\d+ (hours?|minutes?|days?)|expires? (today|tonight|soon|in)|final (notice|warning|reminder)|last chance|limited time|today only)\b/i,
@@ -227,6 +229,36 @@ const RULES: Rule[] = [
       /\b(mobile mechanic|mechanic|repair ?(shop|man)|contractor|handyman|tow(ing)?)\b[^.!?\n]{0,60}\b(cash|zelle|cash ?app|venmo|up ?front|deposit)\b/i,
     ],
     advice: 'Get a written estimate before any work starts, verify licensing and insurance with your state, never pay in full upfront, pay by credit card (it gives you chargeback rights), and keep every receipt and text message.',
+  },
+  {
+    id: 'overconfident_diagnosis',
+    scamType: 'Auto Repair / Contractor Scam',
+    failLabel: 'Promises a 100% sure or "simple" fix for a complex problem',
+    passLabel: 'No overconfident "guaranteed" diagnosis',
+    weight: 18,
+    patterns: [
+      /\b(100 ?%|a hundred percent|one hundred percent|absolutely|definitely|positively) (guarantee[sd]?|sure|certain|positive)\b/i,
+      /\bguarantee[sd]? (it'?s|it is|it'?ll|it will|this (will|is)|to fix|the fix|that'?s|that will|you)\b/i,
+      /\b(simple|easy|quick|cheap|straightforward) (fix|repair|job|swap)\b/i,
+      /\bno (programming|coding|initiali[sz]ation|calibration|relearn|pairing) (is )?(needed|required|necessary)\b/i,
+      /\b(just|only) (need(s)? to |have to )?(swap|replace|change|throw) (in )?(the|a|your|out)\b/i,
+    ],
+    advice: 'Modern cars are complex systems, and almost any part that gets changed needs programming, initialization, or pairing. A mechanic who "guarantees 100%" a simple fix for a complex problem is incompetent, a fraud, or both. Ask for written diagnostic results and whether they have the scan tools to program the part.',
+  },
+  {
+    id: 'appearance',
+    scamType: 'Auto Repair / Contractor Scam',
+    failLabel: 'Unprofessional appearance for a mechanic (not proof, but a warning sign)',
+    passLabel: 'No appearance red flags mentioned',
+    weight: 12,
+    patterns: [
+      /\b(white )?(t-?shirt|tee ?shirt|tank top|wife ?beater)\b/i,
+      /\b(gym|basketball|athletic|board) shorts\b/i,
+      /\b(flip[- ]?flops|slippers|slides|sandals|crocs)\b/i,
+      /\b(no|without( any)?|didn'?t (have|bring)) (tools|toolbox|uniform|scan ?tool|diagnostic (tool|equipment)|work (truck|van))\b/i,
+      /\b(unmarked|personal|no company|no business) (car|truck|van|vehicle|name|logo|sign(age)?)\b/i,
+    ],
+    advice: "A professional mechanic shows up dressed for work, with tools, a diagnostic scanner, and usually a marked vehicle. Someone in a t-shirt, gym shorts, and flip flops isn't there to fix anything but your wallet. Appearance alone isn't proof, so verify their business and license too.",
   },
 ];
 
@@ -409,6 +441,10 @@ export function analyzeScamSync(content: string): ScamAnalysis {
   const passed: Rule[] = [];
 
   for (const rule of RULES) {
+    if (rule.requires && !rule.requires.test(text)) {
+      passed.push(rule);
+      continue;
+    }
     const hits = uniq(rule.patterns.map((p) => snippet(text, p)).filter((s): s is string => !!s));
     if (hits.length) failed.push({ rule, hits });
     else passed.push(rule);
@@ -428,6 +464,7 @@ export function analyzeScamSync(content: string): ScamAnalysis {
   }
 
   const has = (id: string) => failed.some((f) => f.rule.id === id);
+  if (has('auto_contractor') && (has('overconfident_diagnosis') || has('appearance'))) score += 10;
   if (has('payment') && (has('urgency') || has('threats') || has('impersonation') || has('family_emergency') || has('auto_contractor'))) score += 15;
   if (has('sensitive_info') && badLinks.length) score += 10;
   if (has('impersonation') && has('remote_access')) score += 10;
