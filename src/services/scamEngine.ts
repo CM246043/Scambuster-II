@@ -104,7 +104,6 @@ const RULES: Rule[] = [
     failLabel: 'Creates false urgency or pressure to act now',
     passLabel: 'No artificial urgency detected',
     weight: 12,
-    requires: /\b(mechanic|repair|car|truck|vehicle|engine|transmission|shop|garage|tech(nician)?|contractor|handyman|tow(ing)?|install(er)?|plumber|electrician|roofer)s?\b/i,
     patterns: [
       /\b(urgent(ly)?|immediately|right away|right now|act now|asap|as soon as possible|don'?t delay|hurry)\b/i,
       /\b(within (the next )?\d+ (hours?|minutes?|days?)|expires? (today|tonight|soon|in)|final (notice|warning|reminder)|last chance|limited time|today only)\b/i,
@@ -251,6 +250,7 @@ const RULES: Rule[] = [
     failLabel: 'Unprofessional appearance for a mechanic (not proof, but a warning sign)',
     passLabel: 'No appearance red flags mentioned',
     weight: 12,
+    requires: /\b(mechanic|repair|car|truck|vehicle|engine|transmission|shop|garage|tech(nician)?|contractor|handyman|tow(ing)?|install(er)?|plumber|electrician|roofer)s?\b/i,
     patterns: [
       /\b(white )?(t-?shirt|tee ?shirt|tank top|wife ?beater)\b/i,
       /\b(gym|basketball|athletic|board) shorts\b/i,
