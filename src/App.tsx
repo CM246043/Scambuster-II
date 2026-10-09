@@ -16,78 +16,22 @@ import {
   Info,
   ExternalLink,
   RefreshCw,
-  Zap,
+  Lock,
   Terminal
 } from 'lucide-react';
-import { analyzeScam, ScamAnalysis } from './services/geminiService';
+import { analyzeScam, ScamAnalysis } from './services/scamEngine';
 
-const PayPalDonate = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  React.useEffect(() => {
-    const containerId = "paypal-container-UQCHYWTCTD6AN";
-    const container = document.getElementById(containerId);
-    
-    let retryCount = 0;
-    const maxRetries = 5;
-
-    const initPaypal = () => {
-      const paypal = (window as any).paypal;
-      if (paypal && container) {
-        if (!container.hasChildNodes()) {
-          try {
-            paypal.HostedButtons({
-              hostedButtonId: "UQCHYWTCTD6AN",
-            }).render(`#${containerId}`);
-            setIsLoaded(true);
-          } catch (e) {
-            console.error("PayPal Render Error:", e);
-          }
-        } else {
-          setIsLoaded(true);
-        }
-      } else if (retryCount < maxRetries) {
-        retryCount++;
-        setTimeout(initPaypal, 1000);
-      }
-    };
-
-    const timer = setTimeout(initPaypal, 500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  return (
-    <div className="w-full space-y-2">
-      <div 
-        id="paypal-container-UQCHYWTCTD6AN" 
-        className="w-full flex flex-col items-center justify-center min-h-[50px] overflow-hidden rounded-sm bg-black/20 py-2 px-1 border border-white/5"
-      >
-        {!isLoaded && (
-          <div className="text-[9px] text-text-dim uppercase tracking-tighter opacity-50 animate-pulse flex items-center gap-2">
-            <RefreshCw className="w-2 h-2 animate-spin" />
-            Establishing Secure Link...
-          </div>
-        )}
-      </div>
-      
-      {/* Protocol Bypass Link */}
-      <div className="text-center">
-        <a 
-          href="https://www.paypal.com/ncp/payment/UQCHYWTCTD6AN" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-[8px] font-mono text-accent/60 hover:text-accent uppercase tracking-widest transition-colors flex items-center justify-center gap-1"
-        >
-          <span>Manual Support Protocol</span>
-          <ExternalLink className="w-2 h-2" />
-        </a>
-        <p className="text-[7px] text-text-dim/40 mt-1 italic">
-          (Use if button is blocked by firewall)
-        </p>
-      </div>
-    </div>
-  );
-};
+const PayPalDonate = () => (
+  <a
+    href="https://www.paypal.com/ncp/payment/UQCHYWTCTD6AN"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="w-full flex items-center justify-center gap-2 rounded-sm bg-accent/10 border border-accent/30 py-3 text-accent text-xs font-bold uppercase tracking-widest hover:bg-accent/20 transition-colors"
+  >
+    Donate with PayPal
+    <ExternalLink className="w-3 h-3" />
+  </a>
+);
 
 const SAMPLE_SCAMS = [
   "URGENT: Your bank account has been compromised. Click here to verify your identity: http://bank-secure-verify.net/login",
@@ -126,14 +70,24 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<ScamAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [scanCount, setScanCount] = useState(() => {
-    const saved = localStorage.getItem('scam_scan_count');
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const [blockedLink, setBlockedLink] = useState<string | null>(null);
 
-  const SCAN_LIMIT = 50;
+  React.useEffect(() => setBlockedLink(null), [result]);
 
+  // Some embedded browsers and in-app previews silently block new tabs; show the link instead of doing nothing.
+  const openExternal = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+    e.preventDefault();
+    const win = window.open(url, '_blank');
+    if (win) {
+      win.opener = null;
+      setBlockedLink(null);
+      return;
+    }
+    navigator.clipboard?.writeText(url).catch(() => {});
+    setBlockedLink(url);
+  };
   const INPUT_PRESETS = [
+    { label: "A Mechanic's Quote", text: "Mobile mechanic says he needs $1,800 cash up front for parts before he starts. No written estimate, says he's not licensed but has 20 years experience. Pay via Zelle." },
     { label: "A Business Name", text: "Is 'Global Asset Recovery LLC' a reputable business?" },
     { label: "A Person's Name", text: "Verify the reputation of 'Federal Agent Mark Thompson' who contacted me regarding my social security number." },
     { label: "A Suspicious Link", text: "Check this website link: 'microsoft-security-auth.net' for phishing activity." },
@@ -143,19 +97,11 @@ export default function App() {
   const handleAnalyze = async (textToAnalyze: string = content) => {
     if (!textToAnalyze.trim()) return;
     
-    if (scanCount >= SCAN_LIMIT) {
-      setError(`CRITICAL: FREE_QUOTA_EXCEEDED. Analysis nodes exhausted (${scanCount}/${SCAN_LIMIT}). Please utilize the Intel Support Protocol in the sidebar to restore system access.`);
-      return;
-    }
-    
     setIsAnalyzing(true);
     setError(null);
     try {
       const report = await analyzeScam(textToAnalyze);
       setResult(report);
-      const nextCount = scanCount + 1;
-      setScanCount(nextCount);
-      localStorage.setItem('scam_scan_count', nextCount.toString());
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Analysis failed. Please try again.';
       setError(errorMessage);
@@ -167,6 +113,7 @@ export default function App() {
 
   const getRiskColor = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return 'text-amber-400';
       case 'LOW': return 'text-emerald-400';
       case 'MEDIUM': return 'text-amber-400';
       case 'HIGH': return 'text-red-400';
@@ -177,6 +124,7 @@ export default function App() {
 
   const getRiskBg = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return 'bg-amber-500/10 border-amber-500/20';
       case 'LOW': return 'bg-emerald-500/10 border-emerald-500/20';
       case 'MEDIUM': return 'bg-amber-500/10 border-amber-500/20';
       case 'HIGH': return 'bg-red-500/10 border-red-500/20';
@@ -187,6 +135,7 @@ export default function App() {
 
   const getRiskIcon = (level: string) => {
     switch (level) {
+      case 'UNVERIFIED': return <AlertTriangle className="w-8 h-8 text-amber-400" />;
       case 'LOW': return <ShieldCheck className="w-8 h-8 text-emerald-400" />;
       case 'MEDIUM': return <ShieldAlert className="w-8 h-8 text-amber-400" />;
       case 'HIGH': return <ShieldX className="w-8 h-8 text-red-400" />;
@@ -197,51 +146,34 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col font-sans">
-      <header className="h-20 border-b border-border flex items-center justify-between px-10 bg-surface">
+      <header className="h-20 border-b border-border flex items-center justify-between px-4 md:px-10 bg-surface gap-4">
         <div className="flex items-center gap-4">
           <div className="text-sm border-r border-border pr-4 text-text-dim uppercase tracking-[0.15em] font-medium">
-            ScamBuster AI <span className="text-accent ml-2">v4.2.0</span>
+            ScamBuster <span className="text-accent ml-2">v5.0.0</span>
           </div>
           <div className="text-[11px] text-text-dim uppercase tracking-widest hidden md:block">
             Threat Analysis & Intercept Protocol
           </div>
         </div>
-        <div className="flex items-center gap-4 bg-accent/5 border border-accent/20 px-4 py-2 rounded-sm text-accent text-xs font-bold tracking-widest">
-           <div className="pulse-dot mr-2"></div>
-           SYSTEM READY
+        <div className="flex items-center gap-2 md:gap-4 bg-accent/5 border border-accent/20 px-3 md:px-4 py-2 rounded-sm text-accent text-[10px] md:text-xs font-bold tracking-widest whitespace-nowrap">
+           <div className="pulse-dot mr-1 md:mr-2"></div>
+           FREE &amp; PRIVATE
         </div>
       </header>
 
-      <main className="flex-1 grid md:grid-cols-[320px_1fr] overflow-hidden">
+      <main className="flex-1 grid md:grid-cols-[320px_1fr] md:overflow-hidden">
         {/* Sidebar */}
-        <aside className="border-r border-border p-10 flex flex-col gap-10 bg-bg overflow-y-auto">
-          <div className="space-y-2">
-            <span className="section-label">Current Environment</span>
-            <div className="text-2xl font-light text-white tracking-tight">Intercept-v4.2</div>
-            <div className="text-[13px] text-text-dim font-mono">NODE_HASH: 7a2f109</div>
-          </div>
-
+        <aside className="order-last md:order-none border-t md:border-t-0 md:border-r border-border p-4 md:p-10 flex flex-col gap-10 bg-bg md:overflow-y-auto">
           <div className="space-y-4">
-            <span className="section-label">Analysis Quota</span>
-            <div className="bg-surface border border-border p-4 rounded-sm space-y-3">
-              <div className="flex justify-between items-center text-[11px] font-mono">
-                <span className="text-text-dim uppercase tracking-widest">Free Tier Balance</span>
-                <span className={scanCount >= SCAN_LIMIT ? 'text-red-400' : 'text-accent'}>
-                  {Math.max(0, SCAN_LIMIT - scanCount)} / {SCAN_LIMIT} LEFT
-                </span>
+            <span className="section-label">Privacy</span>
+            <div className="bg-surface border border-border p-4 rounded-sm space-y-2">
+              <div className="flex items-center gap-2 text-accent text-[11px] font-bold uppercase tracking-widest">
+                <Lock className="w-3 h-3" />
+                Runs on your device
               </div>
-              <div className="h-1 bg-border w-full relative">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(Math.min(scanCount, SCAN_LIMIT) / SCAN_LIMIT) * 100}%` }}
-                  className={`absolute left-0 top-0 h-full ${scanCount >= SCAN_LIMIT ? 'bg-red-400' : 'bg-accent'}`}
-                />
-              </div>
-              {scanCount >= SCAN_LIMIT && (
-                <div className="text-[10px] text-red-400 font-bold uppercase tracking-tighter leading-none animate-pulse">
-                  CRITICAL: ACCOUNT EXHAUSTED. DONATION REQUIRED FOR RESET.
-                </div>
-              )}
+              <p className="text-[11px] text-text-dim leading-relaxed font-mono">
+                Unlimited free scans. No account, no API key. What you paste never leaves your phone or computer.
+              </p>
             </div>
           </div>
 
@@ -268,23 +200,13 @@ export default function App() {
           </div>
 
           <div className="mt-auto space-y-6">
-            {/* Promo Plug / Credits */}
-            <div className="p-5 bg-accent/5 border border-accent/20 rounded-sm space-y-4 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-100 transition-opacity">
-                <Zap className="w-8 h-8 text-accent animate-pulse" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-accent">
-                  <Terminal className="w-3 h-3" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">AGENTIC INTERFACE</span>
-                </div>
-                <div className="text-sm font-light text-white leading-tight">
-                  Architected by <br/>
-                  <span className="font-medium text-accent">Google AI Studio Build</span>
-                </div>
+            <div className="p-5 bg-accent/5 border border-accent/20 rounded-sm space-y-3">
+              <div className="flex items-center gap-2 text-accent">
+                <Terminal className="w-3 h-3" />
+                <span className="text-[10px] font-bold uppercase tracking-widest">Built by a scam survivor</span>
               </div>
               <p className="text-[11px] text-text-dim leading-relaxed font-mono">
-                Powered by Gemini. Built to intercept deception through advanced behavioral analysis.
+                ScamBuster is a free consumer-protection tool. It checks for the warning signs used in common scams, including shady mobile mechanics and contractors.
               </p>
             </div>
 
@@ -298,7 +220,7 @@ export default function App() {
                   </div>
                   <div className="flex flex-col items-start leading-none">
                     <span className="text-[11px] font-bold uppercase tracking-tight text-white">Project Support</span>
-                    <span className="text-[9px] opacity-70 font-mono text-text-dim">Unlock unlimited node access</span>
+                    <span className="text-[9px] opacity-70 font-mono text-text-dim">Help keep ScamBuster free for everyone</span>
                   </div>
                 </div>
                 <PayPalDonate />
@@ -311,19 +233,19 @@ export default function App() {
               className="btn-secondary w-full flex items-center justify-center gap-2 hover:bg-white/5"
             >
               <RefreshCw className="w-3 h-3" />
-              Flush System Cache
+              Clear
             </button>
           </div>
         </aside>
 
         {/* Content Area */}
-        <div className="p-10 bg-[linear-gradient(135deg,#0a0a0c_0%,#111118_100%)] overflow-y-auto">
+        <div className="p-4 md:p-10 bg-[linear-gradient(135deg,#0a0a0c_0%,#111118_100%)] md:overflow-y-auto">
           <div className="max-w-5xl mx-auto space-y-8">
             {/* Input Section */}
             <section className="space-y-4">
               <div className="flex flex-col gap-1">
                 <span className="section-label">Intercept Content Analysis</span>
-                <p className="text-[10px] text-text-dim uppercase tracking-[0.2em]">Paste anything suspicious: A name, a business, an email, or a link.</p>
+                <p className="text-[10px] text-text-dim uppercase tracking-[0.2em]">Paste anything suspicious: a text, an email, a quote, a link, a phone number, a name, or a business.</p>
               </div>
               <div className="geometric-card relative overflow-hidden ring-1 ring-border group hover:ring-accent/30 transition-all">
                 <div className="scan-line" style={{ opacity: isAnalyzing ? 1 : 0 }}></div>
@@ -428,13 +350,13 @@ export default function App() {
                     }}
                     className="geometric-card flex flex-col justify-between min-h-[220px] hover:border-accent/40 transition-colors"
                   >
-                    <span className="section-label">Readiness Score / Risk</span>
+                    <span className="section-label">Scam Risk Score</span>
                     <div className="flex items-end justify-between">
                       <div className="text-5xl font-light text-white tracking-tighter">
-                        <AnimatedScore value={result.score} />
+                        {result.riskLevel === 'UNVERIFIED' ? '?' : <AnimatedScore value={result.score} />}
                       </div>
                       <div className={`text-xs font-bold uppercase tracking-widest ${getRiskColor(result.riskLevel)}`}>
-                        {result.riskLevel} Risk Level
+                        {result.riskLevel === 'UNVERIFIED' ? 'Unverified' : `${result.riskLevel} Risk Level`}
                       </div>
                     </div>
                     <div className="mt-6">
@@ -447,7 +369,7 @@ export default function App() {
                         />
                       </div>
                       <div className="mt-2 text-[10px] text-text-dim uppercase tracking-widest">
-                        Confidence Factor: 0.982
+                        {result.riskLevel === 'UNVERIFIED' ? 'Not enough info to score. Check their reputation below.' : `Warning signs found: ${result.signalCount}`}
                       </div>
                     </div>
                   </motion.div>
@@ -471,8 +393,8 @@ export default function App() {
                     </div>
                   </motion.div>
 
-                  {/* Reputation Search Findings */}
-                  {result.reputationFindings && (
+                  {/* Reputation Lookup Links */}
+                  {result.reputationTargets.length > 0 && (
                     <motion.div 
                       variants={{
                         hidden: { opacity: 0, y: 20 },
@@ -480,19 +402,46 @@ export default function App() {
                       }}
                       className="geometric-card md:col-span-2 space-y-4 border-accent/30 hover:border-accent/60 transition-colors bg-accent/5 backdrop-blur-sm"
                     >
-                      <span className="section-label text-accent">Live Reputation Intelligence</span>
+                      <span className="section-label text-accent">Check Their Reputation</span>
                       <div className="flex gap-4 items-start">
                         <div className="w-10 h-10 bg-accent/10 border border-accent/20 rounded-full flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
                           <Search className="w-5 h-5 text-accent" />
                         </div>
-                        <div className="flex-1 space-y-2">
-                          <div className="text-[14px] text-text leading-relaxed font-light italic">
-                            "{result.reputationFindings}"
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
-                            <span className="text-[9px] font-mono text-text-dim uppercase tracking-widest">Grounding: Google Search Real-time Verified</span>
-                          </div>
+                        <div className="flex-1 space-y-4 min-w-0">
+                          {result.reputationFindings && (
+                            <p className="text-[13px] text-text leading-relaxed font-light">
+                              {result.reputationFindings}
+                            </p>
+                          )}
+                          {result.reputationTargets.map((target, i) => (
+                            <div key={i} className="space-y-2">
+                              <div className="text-[11px] font-mono text-white break-all">
+                                <span className="text-accent font-bold mr-2">{target.kind}</span>
+                                {target.value}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {target.links.map((link, j) => (
+                                  <a
+                                    key={j}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => openExternal(e, link.url)}
+                                    className="text-[10px] px-3 py-1.5 bg-white/5 border border-white/10 rounded-sm hover:border-accent hover:text-accent transition-all uppercase tracking-tighter flex items-center gap-1"
+                                  >
+                                    {link.label}
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                          {blockedLink && (
+                            <div className="text-[12px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3 space-y-1">
+                              <div>Your browser blocked the new tab. The link was copied, so paste it into your browser's address bar:</div>
+                              <div className="font-mono text-[11px] break-all select-all text-white">{blockedLink}</div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -533,7 +482,7 @@ export default function App() {
                     }}
                     className="geometric-card md:col-span-2 space-y-4"
                   >
-                    <span className="section-label">Supervisor Analysis Logic Log</span>
+                    <span className="section-label">Analysis Log</span>
                     <div className="bg-bg/50 border border-border p-4 font-mono text-[12px] leading-relaxed text-text-dim/80">
                       <div className="flex gap-4">
                         <span className="text-accent underline shrink-0">[LOG]</span>
@@ -550,7 +499,7 @@ export default function App() {
                     }}
                     className="geometric-card md:col-span-2 space-y-4"
                   >
-                     <span className="section-label">Emergency Protocol Summary</span>
+                     <span className="section-label">What To Do Next</span>
                      <div className="grid md:grid-cols-2 gap-8">
                        <div className="space-y-4">
                          <div className="text-[13px] text-text leading-relaxed font-mono">
@@ -583,14 +532,14 @@ export default function App() {
               <div className="space-y-4">
                 <h3 className="text-sm font-bold uppercase tracking-widest text-white">Advisory Disclaimer</h3>
                 <p className="text-[12px] text-text-dim leading-relaxed font-mono">
-                  ScamBuster AI is an advanced analytical node designed for educational and defensive assessment. 
-                  Analysis results are generated by artificial intelligence [Gemini 3 Flash] and may occasionally 
-                  suffer from "hallucinations" or false outcomes. 
+                  ScamBuster is an educational tool that checks text against known scam warning signs. It runs
+                  entirely in your browser and does not search the web. It can miss new scam tactics or flag
+                  honest messages, so a low score does not guarantee something is safe. 
                 </p>
                 <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-sm">
                   <p className="text-[11px] text-red-400 font-bold uppercase tracking-tight leading-normal">
                     CRITICAL: This tool does not provide legal, financial, or professional security advice. 
-                    NEVER rely solely on AI for financial decisions. Always verify with official entities.
+                    NEVER rely solely on an automated tool for financial decisions. Always verify with official entities.
                   </p>
                 </div>
               </div>
@@ -633,7 +582,7 @@ export default function App() {
 
           <footer className="mt-20 pt-10 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4 opacity-40 pb-10">
             <div className="text-[10px] font-mono tracking-widest uppercase">
-              // SCAMBUSTER AI NODE_42 // ENCRYPTED SESSION // ARIZONA CONSUMER DEFENSE
+              // SCAMBUSTER // RUNS ON YOUR DEVICE // ARIZONA CONSUMER DEFENSE
             </div>
             <div className="flex gap-6">
                <span className="text-[10px] font-bold uppercase tracking-tighter">Verified Protocol</span>
